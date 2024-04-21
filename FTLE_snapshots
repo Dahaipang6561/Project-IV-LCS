@@ -1,0 +1,107 @@
+@author: yilin
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define the double gyre dynamical system function
+A = 0.1
+epsilon = 0.25
+w = np.pi / 5
+def a(t):
+    return epsilon * np.sin(w * t)
+
+
+def b(t):
+    return 1 - 2 * epsilon * np.sin(w * t)
+
+
+def f(x, t):
+    return a(t) * x ** 2 + b(t) * x
+
+
+def phi(x, y, t):
+    return A * np.sin(np.pi * f(x, t)) * np.sin(np.pi * y)
+
+
+def velocity_x(x, y, t):
+    u = -np.pi*A*np.sin(np.pi*f(x,t))*np.cos(np.pi*y) 
+    return u
+
+
+def velocity_y(x, y, t):
+    v = np.pi*A*np.cos(np.pi*f(x,t))*np.sin(np.pi*y)*(2*a(t)*x+b(t))
+    return v
+
+
+
+def main():
+    # Create many points distributed evenly on the grid
+    T = 50
+    frame = 15
+    time = np.linspace(0, T, T * frame)  # Time
+    # set out the points, evenly distributed in the grid
+    x_range = np.linspace(0, 2, 300)  # x positions
+    y_range = np.linspace(0, 1, 150)  # y positions
+
+    # initial positions
+    x_initial = np.zeros([len(x_range), len(y_range)])
+    y_initial = np.zeros([len(x_range), len(y_range)])
+
+    for i in range(len(x_range)):
+        for j in range(len(y_range)):
+            x_initial[i][j] = x_range[i]
+            y_initial[i][j] = y_range[j]
+
+    # final positions
+    x_final = np.zeros([len(x_initial), len(y_range)])
+    y_final = np.zeros([len(y_initial), len(y_range)])
+
+    ## map initial to final positions
+    for i, x in enumerate(x_range):
+        for j, y in enumerate(y_range):
+            x0, y0 = x, y  # initialize positions before updating
+            for k, t in enumerate(time):  # voids the first entry
+                dx_dt = velocity_x(x0, y0, t)
+                dy_dt = velocity_y(x0, y0, t)
+                x0 += dx_dt * (1 / frame)
+                y0 += dy_dt * (1 / frame)
+            x_final[i][j] = x0
+            y_final[i][j] = y0
+
+    # compute the jacobian matrix using finite difference
+    FTLE = np.zeros([len(x_range), len(y_range)])
+    jacobian_i = np.zeros([2, 2])
+    for i, x in enumerate(x_range[1:-1], 1):
+        for j, y in enumerate(y_range[1:-1], 1):
+            if x_initial[i + 1][j] - x_initial[i - 1][j] == 0: #deal with the boundaries
+                print(i, j)
+            jacobian_i[0][0] = (x_final[i + 1][j] - x_final[i - 1][j]) / (x_initial[i + 1][j] - x_initial[i - 1][j])
+            jacobian_i[0][1] = (x_final[i][j + 1] - x_final[i][j - 1]) / (y_initial[i][j + 1] - y_initial[i][j - 1])
+            jacobian_i[1][0] = (y_final[i + 1][j] - y_final[i - 1][j]) / (x_initial[i + 1][j] - x_initial[i - 1][j])
+            jacobian_i[1][1] = (y_final[i][j + 1] - y_final[i][j - 1]) / (y_initial[i][j + 1] - y_initial[i][j - 1])
+            # now compute cauchy_green tensor
+            cauchy_green = np.dot(np.transpose(jacobian_i), jacobian_i)
+            # compute largest eigenvalues
+            eigenv = np.linalg.eigvals(cauchy_green)
+            meigenv = np.max(eigenv)
+            # compute ftle!!!
+            FTLE[i][j] = 1 / abs(T) * np.log(meigenv ** (1 / 2))
+    for i in (1, -1):
+        for j in (1, -1):
+            FTLE[i][j] = 0
+
+
+    plt.figure(figsize=(14, 7))  
+    im = plt.imshow(FTLE.T, extent=(x_range.min(), x_range.max(), y_range.min(), y_range.max()), origin='lower', cmap='viridis')
+    cbar = plt.colorbar(im, label='FTLE Magnitude', shrink=0.8)  # Set the shrink parameter to 0.8 to make the colorbar 80% of its original size
+    cbar.ax.tick_params(labelsize=14)  # Increase the font size of colorbar labels
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.xlabel('x', fontsize=20)
+    plt.ylabel('y', fontsize=20)
+    plt.show()
+
+
+if __name__ == '__main__':
+    main()
