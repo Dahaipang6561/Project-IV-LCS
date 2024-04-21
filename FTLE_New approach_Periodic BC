@@ -1,0 +1,117 @@
+###Used for generating Figure 3.3
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# time variables
+T = 5  # final time
+dt = 0.01  # integration time step
+Nt = int((T) / dt)  #  number of time steps
+
+NX = 200        # number of discretized points in x-direction
+NY = 200        # number of discretized points in y-direction
+
+Xstart = -2*np.pi
+Xend = 2*np.pi
+Ystart = -2*np.pi
+Yend = 2*np.pi      #domain 
+Lx = Xend - Xstart
+Ly = Yend - Ystart
+
+# Spatial variables + wavenumbers
+dx = Lx / (NX)
+dy = Ly / (NY)
+xx, yy = np.meshgrid(Xstart+np.arange(NX)*dx, Ystart+np.arange(NY)*dy, indexing='ij')
+
+
+# define the function of velocity field
+def sin_saddle(x, y):
+    return np.sin(x), -np.sin(y)
+
+
+def gradu_sin_saddle(x, y):
+    return np.cos(x), np.zeros_like(np.cos(x)), np.zeros_like(np.cos(x)),-np.cos(y)
+
+# setting the initial conditions
+G11 = np.ones_like(xx)
+G12 = np.zeros_like(xx)
+G21 = np.zeros_like(xx)
+G22 = np.ones_like(xx) #gradient of inverse map at initial time should be identity map
+
+G11_x = np.zeros_like(G11)
+G11_y = np.zeros_like(G11)
+G12_x = np.zeros_like(G11)
+G12_y = np.zeros_like(G11)
+G21_x = np.zeros_like(G11)
+G21_y = np.zeros_like(G11)
+G22_x = np.zeros_like(G11)
+G22_y = np.zeros_like(G11)  #individual entries of gradient of B
+
+
+UU, VV  = sin_saddle(xx, yy)
+U_dx, U_dy, V_dx, V_dy = gradu_sin_saddle(xx, yy)
+
+
+# Solving PDE using PERIODIC condition, where we have passed the stack the first row/column to the last row/column
+for i in range(Nt):
+    # Periodic boundary conditions  
+    G11E = np.r_[G11[1:,:],G11[[0],:]]
+    G11W = np.r_[G11[[-1],:],G11[:-1,:]]
+    G11N = np.r_['-1',G11[:,1:],G11[:,[0]]]
+    G11S = np.r_['-1',G11[:,[-1]],G11[:,:-1]]
+    G12E = np.r_[G12[1:,:],G12[[0],:]]
+    G12W = np.r_[G12[[-1],:],G12[:-1,:]]
+    G12N = np.r_['-1',G12[:,1:],G12[:,[0]]]
+    G12S = np.r_['-1',G12[:,[-1]],G12[:,:-1]]
+    G21E = np.r_[G21[1:,:],G21[[0],:]]
+    G21W = np.r_[G21[[-1],:],G21[:-1,:]]
+    G21N = np.r_['-1',G21[:,1:],G21[:,[0]]]
+    G21S = np.r_['-1',G21[:,[-1]],G21[:,:-1]]
+    G22E = np.r_[G22[1:,:],G22[[0],:]]
+    G22W = np.r_[G22[[-1],:],G22[:-1,:]]
+    G22N = np.r_['-1',G22[:,1:],G22[:,[0]]]
+    G22S = np.r_['-1',G22[:,[-1]],G22[:,:-1]]
+    #periodic b.c. is implemented by taking components at the end to the start, horizonally(E&W) and vertically(N&S)
+
+
+    #central difference to get corresponding partial derivatives
+    G11_x = (G11E - G11W)/(2*dx)
+    G11_y = (G11N - G11S)/(2*dy)
+    G12_x = (G12E - G12W)/(2*dx)
+    G12_y = (G12N - G12S)/(2*dy)
+    G21_x = (G21E - G21W)/(2*dx)
+    G21_y = (G21N - G21S)/(2*dy)
+    G22_x = (G22E - G22W)/(2*dx)
+    G22_y = (G22N - G22S)/(2*dy)
+    
+
+    #update
+    G11 += - dt*(U_dx*G11 + V_dx*G12 + UU*G11_x + VV*G11_y)
+    G12 += - dt*(U_dy*G11 + V_dy*G12 + UU*G12_x + VV*G12_y)
+    G21 += - dt*(U_dx*G21 + V_dx*G22 + UU*G21_x + VV*G21_y)
+    G12 += - dt*(U_dy*G21 + V_dy*G22 + UU*G22_x + VV*G22_y)
+    
+
+    
+
+
+CGbA = G11*G11 + G12*G12
+CGbB = G11*G12 + G21*G22
+CGbC = G12*G12 + G22*G22
+trace = CGbA + CGbC
+detrm = CGbA*CGbC - CGbB*CGbB
+disrm = np.sqrt(trace**2 - 4*detrm) 
+lambda_max = (trace + disrm) / 2 #Using the expression of eigenvalues for n=2 case
+FTLEb = 0.5*np.log(lambda_max) / np.abs(T)
+
+
+plt.figure(figsize=(14, 7))  
+im = plt.imshow(FTLEb.T, extent=(Xstart, Xend, Ystart, Yend), origin='lower', cmap='viridis')
+cbar = plt.colorbar(im, label='FTLE Magnitude', shrink=0.8)  # Set the shrink parameter to 0.8 to make the colorbar 80% of its original size
+cbar.ax.tick_params(labelsize=14)  # Increase the font size of colorbar labels
+plt.xticks(fontsize=20)
+plt.yticks(fontsize=20)
+plt.xlabel('x', fontsize=20)
+plt.ylabel('y', fontsize=20)
+plt.show()
+
